@@ -20,7 +20,12 @@ import {
 } from "../key-management/vault-timeout";
 import { ErrorResponse } from "../models/response/error.response";
 import { AppIdService } from "../platform/abstractions/app-id.service";
-import { Environment, EnvironmentService } from "../platform/abstractions/environment.service";
+import {
+  Environment,
+  EnvironmentService,
+  Region,
+  Urls,
+} from "../platform/abstractions/environment.service";
 import { LogService } from "../platform/abstractions/log.service";
 import { PlatformUtilsService } from "../platform/abstractions/platform-utils.service";
 
@@ -51,6 +56,9 @@ describe("ApiService", () => {
     platformUtilsService.getDevice.mockReturnValue(DeviceType.ChromeExtension);
 
     environmentService = mock();
+    environmentService.environment$ = of({
+      getCustomRequestHeader: () => null,
+    } satisfies Partial<Environment> as Environment);
     appIdService = mock();
     refreshAccessTokenErrorCallback = jest.fn();
     logService = mock();
@@ -1305,6 +1313,113 @@ describe("ApiService", () => {
       await expect(sut.postEventsCollect(events)).resolves.toEqual(
         events.slice(EventUploadBatchSize),
       );
+    });
+  });
+
+  describe("custom request header", () => {
+    function makeEnvironment(
+      header: { name: string; value: string } | null,
+      urls: Urls = { api: "https://vault.example.com/api" },
+    ): Environment {
+      return {
+        getRegion: () => Region.SelfHosted,
+        getUrls: () => urls,
+        isCloud: () => false,
+        getApiUrl: () => urls.api ?? "",
+        getEventsUrl: () => "",
+        getIconsUrl: () => "",
+        getIdentityUrl: () => "",
+        getKeyConnectorUrl: () => null,
+        getNotificationsUrl: () => "",
+        getScimUrl: () => "",
+        getSendUrl: () => "",
+        getWebVaultUrl: () => "",
+        getHostname: () => "vault.example.com",
+        hasBaseUrl: () => false,
+        getCustomRequestHeader: () => header,
+      };
+    }
+
+    function makeNativeFetch() {
+      const nativeFetch = jest.fn<Promise<Response>, [request: Request]>();
+      nativeFetch.mockImplementation(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+        } satisfies Partial<Response> as Response),
+      );
+      sut.nativeFetch = nativeFetch;
+      return nativeFetch;
+    }
+
+    function makeRequest(url: string) {
+      return httpOperations.createRequest(url, { method: "GET", headers: new Headers() });
+    }
+
+    it("attaches the header to a request targeting a configured self-hosted origin", async () => {
+      environmentService.environment$ = of(makeEnvironment({ name: "X-Auth", value: "tok" }));
+
+      const nativeFetch = makeNativeFetch();
+
+      await sut.fetch(makeRequest("https://vault.example.com/api/something"));
+
+      const request = nativeFetch.mock.calls[0][0];
+      expect(request.headers.get("X-Auth")).toBe("tok");
+    });
+
+    it("does not attach the header to a different origin", async () => {
+      environmentService.environment$ = of(makeEnvironment({ name: "X-Auth", value: "tok" }));
+
+      const nativeFetch = makeNativeFetch();
+
+      await sut.fetch(makeRequest("https://other.example.com/api/something"));
+
+      const request = nativeFetch.mock.calls[0][0];
+      expect(request.headers.get("X-Auth")).toBeNull();
+    });
+
+    it("does not attach the header to a look-alike host (exact origin only)", async () => {
+      environmentService.environment$ = of(makeEnvironment({ name: "X-Auth", value: "tok" }));
+
+      const nativeFetch = makeNativeFetch();
+
+      await sut.fetch(makeRequest("https://vault.example.com.evil.com/api/something"));
+
+      const request = nativeFetch.mock.calls[0][0];
+      expect(request.headers.get("X-Auth")).toBeNull();
+    });
+
+    it("does not attach the header to a cloud origin resolved by a getter fallback", async () => {
+      // Only the api URL is explicitly configured. The real service's getEventsUrl()
+      // getter would fall back to the production cloud origin, so the header must not
+      // be sent to that origin even though the getter reports it.
+      const env = makeEnvironment(
+        { name: "X-Auth", value: "tok" },
+        {
+          api: "https://vault.example.com/api",
+        },
+      );
+      env.getEventsUrl = () => "https://events.bitwarden.com";
+      environmentService.environment$ = of(env);
+
+      const nativeFetch = makeNativeFetch();
+
+      await sut.fetch(makeRequest("https://events.bitwarden.com/collect"));
+
+      const request = nativeFetch.mock.calls[0][0];
+      expect(request.headers.get("X-Auth")).toBeNull();
+    });
+
+    it("does not attach the header when none is configured", async () => {
+      environmentService.environment$ = of(makeEnvironment(null));
+
+      const nativeFetch = makeNativeFetch();
+
+      await sut.fetch(makeRequest("https://vault.example.com/api/something"));
+
+      const request = nativeFetch.mock.calls[0][0];
+      expect(request.headers.get("X-Auth")).toBeNull();
     });
   });
 });

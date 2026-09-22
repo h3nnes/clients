@@ -158,9 +158,13 @@ describe("NotificationsService", () => {
     }
   }
 
-  function emitNotificationUrl(url: string) {
+  function emitNotificationUrl(
+    url: string,
+    customRequestHeader: { name: string; value: string } | null = null,
+  ) {
     environment.next({
       getNotificationsUrl: () => url,
+      getCustomRequestHeader: () => customRequestHeader,
     } as Environment);
   }
 
@@ -397,6 +401,19 @@ describe("NotificationsService", () => {
   it("does not connect to any notification stream when there is no active user", () => {
     const subscription = sut.notifications$.subscribe();
     emitActiveUser(null);
+
+    expect(signalRNotificationConnectionService.connect$).not.toHaveBeenCalled();
+    expect(webPushNotificationConnectionService.supportStatus$).not.toHaveBeenCalled();
+
+    subscription.unsubscribe();
+  });
+
+  it("does not connect to any notification stream when a custom request header is configured", async () => {
+    const subscription = sut.notifications$.subscribe();
+    emitActiveUser(mockUser1);
+    emitNotificationUrl("http://test.example.com", { name: "X-Auth", value: "tok" });
+    authStatusGetter(mockUser1).next(AuthenticationStatus.Unlocked);
+    await awaitAsync(1);
 
     expect(signalRNotificationConnectionService.connect$).not.toHaveBeenCalled();
     expect(webPushNotificationConnectionService.supportStatus$).not.toHaveBeenCalled();

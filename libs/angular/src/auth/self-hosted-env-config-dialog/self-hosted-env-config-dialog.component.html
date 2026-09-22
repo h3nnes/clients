@@ -94,6 +94,43 @@
       </bit-form-field>
     </ng-container>
 
+    <p bitTypography="body1" class="tw-text-muted tw-mt-3">
+      {{ "customRequestHeader" | i18n }}
+    </p>
+
+    <bit-form-field>
+      <bit-label>{{ "customRequestHeaderName" | i18n }}</bit-label>
+      <input
+        id="self_hosted_env_settings_form_input_custom_header_name"
+        bitInput
+        type="text"
+        formControlName="customHeaderName"
+        appInputVerbatim
+      />
+    </bit-form-field>
+
+    <bit-form-field>
+      <bit-label>{{ "customRequestHeaderValue" | i18n }}</bit-label>
+      <input
+        id="self_hosted_env_settings_form_input_custom_header_value"
+        bitInput
+        type="password"
+        formControlName="customHeaderValue"
+        appInputVerbatim
+      />
+      <button type="button" bitIconButton bitSuffix bitPasswordInputToggle></button>
+      <bit-hint>{{ "customRequestHeaderHelp" | i18n }}</bit-hint>
+    </bit-form-field>
+
+    <span
+      *ngIf="customHeaderErrorMessage"
+      class="tw-block tw-text-danger tw-mt-2"
+      aria-live="assertive"
+      role="alert"
+    >
+      <bit-icon name="bwi-error"></bit-icon> {{ customHeaderErrorMessage | i18n }}
+    </span>
+
     <span
       *ngIf="showErrorSummary"
       class="tw-block tw-text-danger tw-mt-2"

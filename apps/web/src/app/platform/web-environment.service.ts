@@ -71,7 +71,10 @@ export class WebEnvironmentService extends DefaultEnvironmentService {
     this.globalEnvironment$ = subject.asObservable();
   }
 
-  // Web setting env means navigating to a new location
+  // Web setting env means navigating to a new location.
+  // Note: the custom request header (self-hosted secret header) is not supported on the
+  // web vault. Web self-hosted environments are configured by the URL the vault is served
+  // from, so there is no place to enter a header; the parameter is intentionally ignored.
   async setEnvironment(region: Region | string, urls?: Urls): Promise<Urls> {
     if (region === Region.SelfHosted) {
       throw new Error("setEnvironment does not work in web for self-hosted.");

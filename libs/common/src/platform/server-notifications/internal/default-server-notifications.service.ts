@@ -97,9 +97,23 @@ export class DefaultServerNotificationsService implements ServerNotificationsSer
    */
   private userNotifications$(userId: UserId) {
     return this.environmentService.getEnvironment$(userId).pipe(
-      map((env) => env.getNotificationsUrl()),
-      distinctUntilChanged(),
-      switchMap((notificationsUrl) => {
+      map((env) => ({
+        notificationsUrl: env.getNotificationsUrl(),
+        hasCustomRequestHeader: env.getCustomRequestHeader?.() != null,
+      })),
+      distinctUntilChanged(
+        (a, b) =>
+          a.notificationsUrl === b.notificationsUrl &&
+          a.hasCustomRequestHeader === b.hasCustomRequestHeader,
+      ),
+      switchMap(({ notificationsUrl, hasCustomRequestHeader }) => {
+        if (hasCustomRequestHeader) {
+          this.logService.info(
+            "Custom request header configured; skipping server notifications connection.",
+          );
+          return EMPTY;
+        }
+
         if (notificationsUrl === DISABLED_NOTIFICATIONS_URL) {
           return EMPTY;
         }

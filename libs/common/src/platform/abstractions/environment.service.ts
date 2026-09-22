@@ -1,6 +1,7 @@
 import { Observable } from "rxjs";
 
 import { UserId } from "../../types/guid";
+import { CustomRequestHeader } from "../misc/custom-request-header";
 
 export type Urls = {
   base?: string;
@@ -13,6 +14,7 @@ export type Urls = {
   keyConnector?: string;
   scim?: string;
   send?: string;
+  customRequestHeader?: CustomRequestHeader | null;
 };
 
 /**
@@ -85,6 +87,12 @@ export interface Environment {
   getWebVaultUrl(): string;
 
   /**
+   * Retrieve the custom request header to send to the configured self-hosted
+   * server, if any. Cloud environments always return null.
+   */
+  getCustomRequestHeader(): CustomRequestHeader | null;
+
+  /**
    * Get a friendly hostname for the environment.
    *
    * - For self-hosted this is the web vault url without protocol prefix.
@@ -122,7 +130,11 @@ export abstract class EnvironmentService {
   /**
    * Set the global environment.
    */
-  abstract setEnvironment(region: Region, urls?: Urls): Promise<Urls>;
+  abstract setEnvironment(
+    region: Region,
+    urls?: Urls,
+    customRequestHeader?: CustomRequestHeader | null,
+  ): Promise<Urls>;
 
   /**
    * Seed the environment state for a given user based on the global environment.

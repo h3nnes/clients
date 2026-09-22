@@ -33,7 +33,15 @@ export class AnonymousHubService implements AnonymousHubServiceAbstraction {
   ) {}
 
   async createHubConnection(token: string) {
-    this.url = (await firstValueFrom(this.environmentService.environment$)).getNotificationsUrl();
+    const environment = await firstValueFrom(this.environmentService.environment$);
+
+    // Browsers cannot set custom headers on the WebSocket handshake, so when a
+    // custom request header is configured we skip the connection entirely.
+    if (environment.getCustomRequestHeader?.() != null) {
+      return;
+    }
+
+    this.url = environment.getNotificationsUrl();
     if (!this.url.startsWith("https://") && !this.platformUtilsService.isDev()) {
       throw new InsecureUrlNotAllowedError();
     }

@@ -17,6 +17,7 @@ import {
 } from "@bitwarden/common/platform/abstractions/environment.service";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { PlatformUtilsService } from "@bitwarden/common/platform/abstractions/platform-utils.service";
+import { validateCustomRequestHeader } from "@bitwarden/common/platform/misc/custom-request-header";
 import {
   DialogRef,
   AsyncActionsModule,
@@ -25,6 +26,7 @@ import {
   DialogService,
   FormFieldModule,
   IconModule,
+  IconButtonModule,
   LinkModule,
   TypographyModule,
 } from "@bitwarden/components";
@@ -59,6 +61,29 @@ function selfHostedEnvSettingsFormValidator(): ValidatorFn {
     } else {
       return { atLeastOneUrlIsRequired: true }; // invalid
     }
+  };
+}
+
+/**
+ * Validator for the optional custom request header. Both fields must be empty
+ * (no header configured) or both must be valid.
+ */
+export function customRequestHeaderFormValidator(): ValidatorFn {
+  return (control: AbstractControl): ValidationErrors | null => {
+    const formGroup = control as FormGroup;
+    const name = (formGroup.get("customHeaderName")?.value ?? "") as string;
+    const value = (formGroup.get("customHeaderValue")?.value ?? "") as string;
+
+    if (name.trim() === "" && value.trim() === "") {
+      return null;
+    }
+
+    const result = validateCustomRequestHeader({ name, value });
+    if (result.valid === false) {
+      return { customRequestHeaderInvalid: { reason: result.reason } };
+    }
+
+    return null;
   };
 }
 
@@ -100,6 +125,7 @@ function onlyHttpsValidator(): ValidatorFn {
     ReactiveFormsModule,
     FormFieldModule,
     AsyncActionsModule,
+    IconButtonModule,
   ],
 })
 export class SelfHostedEnvConfigDialogComponent implements OnInit, OnDestroy {
@@ -127,8 +153,12 @@ export class SelfHostedEnvConfigDialogComponent implements OnInit, OnDestroy {
       iconsUrl: ["", [onlyHttpsValidator()]],
       notificationsUrl: ["", [onlyHttpsValidator()]],
       sendUrl: ["", [onlyHttpsValidator()]],
+      customHeaderName: [""],
+      customHeaderValue: [""],
     },
-    { validators: selfHostedEnvSettingsFormValidator() },
+    {
+      validators: [selfHostedEnvSettingsFormValidator(), customRequestHeaderFormValidator()],
+    },
   );
 
   get baseUrl(): FormControl {
@@ -159,6 +189,30 @@ export class SelfHostedEnvConfigDialogComponent implements OnInit, OnDestroy {
     return this.formGroup.get("sendUrl") as FormControl;
   }
 
+  get customHeaderName(): FormControl {
+    return this.formGroup.get("customHeaderName") as FormControl;
+  }
+
+  get customHeaderValue(): FormControl {
+    return this.formGroup.get("customHeaderValue") as FormControl;
+  }
+
+  get customHeaderErrorMessage(): string | null {
+    const error = this.formGroup.errors?.["customRequestHeaderInvalid"];
+    if (!error) {
+      return null;
+    }
+
+    switch (error.reason) {
+      case "name":
+        return "customRequestHeaderInvalidName";
+      case "value":
+        return "customRequestHeaderInvalidValue";
+      default:
+        return "customRequestHeaderInvalidValue";
+    }
+  }
+
   showCustomEnv = false;
   showErrorSummary = false;
 
@@ -185,6 +239,7 @@ export class SelfHostedEnvConfigDialogComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (env) => {
           const urls = env.getUrls();
+          const header = env.getCustomRequestHeader();
           this.formGroup.patchValue({
             baseUrl: urls.base || "",
             webVaultUrl: urls.webVault || "",
@@ -193,6 +248,8 @@ export class SelfHostedEnvConfigDialogComponent implements OnInit, OnDestroy {
             iconsUrl: urls.icons || "",
             notificationsUrl: urls.notifications || "",
             sendUrl: urls.send || "",
+            customHeaderName: header?.name ?? "",
+            customHeaderValue: header?.value ?? "",
           });
         },
       });
@@ -206,15 +263,24 @@ export class SelfHostedEnvConfigDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    await this.environmentService.setEnvironment(Region.SelfHosted, {
-      base: this.baseUrl.value,
-      api: this.apiUrl.value,
-      identity: this.identityUrl.value,
-      webVault: this.webVaultUrl.value,
-      icons: this.iconsUrl.value,
-      notifications: this.notificationsUrl.value,
-      send: this.sendUrl.value,
+    const headerResult = validateCustomRequestHeader({
+      name: this.customHeaderName.value,
+      value: this.customHeaderValue.value,
     });
+
+    await this.environmentService.setEnvironment(
+      Region.SelfHosted,
+      {
+        base: this.baseUrl.value,
+        api: this.apiUrl.value,
+        identity: this.identityUrl.value,
+        webVault: this.webVaultUrl.value,
+        icons: this.iconsUrl.value,
+        notifications: this.notificationsUrl.value,
+        send: this.sendUrl.value,
+      },
+      headerResult.valid ? headerResult.header : null,
+    );
 
     await this.dialogRef.close(true);
   };
