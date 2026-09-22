@@ -24,6 +24,7 @@ import {
   Environment,
   EnvironmentService,
   Region,
+  Urls,
 } from "../platform/abstractions/environment.service";
 import { LogService } from "../platform/abstractions/log.service";
 import { PlatformUtilsService } from "../platform/abstractions/platform-utils.service";
@@ -1316,12 +1317,15 @@ describe("ApiService", () => {
   });
 
   describe("custom request header", () => {
-    function makeEnvironment(header: { name: string; value: string } | null): Environment {
+    function makeEnvironment(
+      header: { name: string; value: string } | null,
+      urls: Urls = { api: "https://vault.example.com/api" },
+    ): Environment {
       return {
         getRegion: () => Region.SelfHosted,
-        getUrls: () => ({}),
+        getUrls: () => urls,
         isCloud: () => false,
-        getApiUrl: () => "https://vault.example.com/api",
+        getApiUrl: () => urls.api ?? "",
         getEventsUrl: () => "",
         getIconsUrl: () => "",
         getIdentityUrl: () => "",
@@ -1381,6 +1385,27 @@ describe("ApiService", () => {
       const nativeFetch = makeNativeFetch();
 
       await sut.fetch(makeRequest("https://vault.example.com.evil.com/api/something"));
+
+      const request = nativeFetch.mock.calls[0][0];
+      expect(request.headers.get("X-Auth")).toBeNull();
+    });
+
+    it("does not attach the header to a cloud origin resolved by a getter fallback", async () => {
+      // Only the api URL is explicitly configured. The real service's getEventsUrl()
+      // getter would fall back to the production cloud origin, so the header must not
+      // be sent to that origin even though the getter reports it.
+      const env = makeEnvironment(
+        { name: "X-Auth", value: "tok" },
+        {
+          api: "https://vault.example.com/api",
+        },
+      );
+      env.getEventsUrl = () => "https://events.bitwarden.com";
+      environmentService.environment$ = of(env);
+
+      const nativeFetch = makeNativeFetch();
+
+      await sut.fetch(makeRequest("https://events.bitwarden.com/collect"));
 
       const request = nativeFetch.mock.calls[0][0];
       expect(request.headers.get("X-Auth")).toBeNull();

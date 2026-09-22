@@ -632,6 +632,8 @@ export class ApiService implements ApiServiceAbstraction {
         body: data,
         headers,
       });
+      // The XHR upload path bypasses fetch(), so the header must be applied here.
+      await this.applyCustomRequestHeader(request);
       return this.nativeXMLHttpRequest(request, options.onProgress);
     }
 
@@ -1385,19 +1387,14 @@ export class ApiService implements ApiServiceAbstraction {
       return false;
     }
 
-    const candidates = [
-      env.getApiUrl(),
-      env.getIdentityUrl(),
-      env.getEventsUrl(),
-      env.getIconsUrl(),
-      env.getNotificationsUrl(),
-      env.getSendUrl(),
-      env.getKeyConnectorUrl(),
-      env.getWebVaultUrl(),
-    ];
+    // Only consider the explicitly configured URLs. The get*Url() getters must not
+    // be used here: when a specific self-hosted URL is unset they fall back to the
+    // Bitwarden production cloud URLs, and matching those would leak the secret to
+    // the cloud. An unset URL is simply never a valid target for the header.
+    const urls = env.getUrls();
 
-    return candidates.some((url) => {
-      if (url == null || url === "") {
+    return Object.values(urls).some((url) => {
+      if (typeof url !== "string" || url === "") {
         return false;
       }
       try {
