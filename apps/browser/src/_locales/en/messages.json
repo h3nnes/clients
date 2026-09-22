@@ -1980,6 +1980,24 @@
   "selfHostedEnvMustUseHttps": {
     "message": "URLs must use HTTPS."
   },
+  "customRequestHeader": {
+    "message": "Custom request header"
+  },
+  "customRequestHeaderName": {
+    "message": "Header name"
+  },
+  "customRequestHeaderValue": {
+    "message": "Header value"
+  },
+  "customRequestHeaderHelp": {
+    "message": "This header is sent only to your self-hosted server. Cloudflare Access requires two headers, which is not supported here."
+  },
+  "customRequestHeaderInvalidName": {
+    "message": "Header name is invalid. Use a valid HTTP header name that is not reserved by Bitwarden."
+  },
+  "customRequestHeaderInvalidValue": {
+    "message": "Header value is invalid. Use printable ASCII characters (1 to 4096) with no control characters."
+  },
   "customEnvironment": {
     "message": "Custom environment"
   },
