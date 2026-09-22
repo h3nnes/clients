@@ -13,6 +13,7 @@ import {
   Urls,
   CloudRegion,
 } from "../abstractions/environment.service";
+import { CustomRequestHeader, validateCustomRequestHeader } from "../misc/custom-request-header";
 import { Utils } from "../misc/utils";
 import {
   ENVIRONMENT_DISK,
@@ -33,6 +34,7 @@ export class EnvironmentUrls {
   webVault: string = null;
   keyConnector: string = null;
   send: string = null;
+  customRequestHeader: CustomRequestHeader = null;
 }
 
 class EnvironmentState {
@@ -230,7 +232,11 @@ export class DefaultEnvironmentService implements EnvironmentService {
     return this.availableRegions().find((r) => r.key === region);
   }
 
-  async setEnvironment(region: Region, urls?: Urls): Promise<Urls> {
+  async setEnvironment(
+    region: Region,
+    urls?: Urls,
+    customRequestHeader?: CustomRequestHeader | null,
+  ): Promise<Urls> {
     // Unknown regions are treated as self-hosted
     if (this.getRegionConfig(region) == null) {
       region = Region.SelfHosted;
@@ -249,6 +255,8 @@ export class DefaultEnvironmentService implements EnvironmentService {
 
       return null;
     } else {
+      const validatedHeader = this.validateCustomRequestHeaderOrDefault(customRequestHeader);
+
       // Clean the urls
       urls.base = formatUrl(urls.base);
       urls.webVault = formatUrl(urls.webVault);
@@ -273,11 +281,32 @@ export class DefaultEnvironmentService implements EnvironmentService {
           events: urls.events,
           keyConnector: urls.keyConnector,
           send: urls.send,
+          customRequestHeader: validatedHeader,
         },
       }));
 
       return urls;
     }
+  }
+
+  /**
+   * Validates the provided custom request header, treating a missing or entirely
+   * empty header as "no header configured". Throws when a partially or invalidly
+   * configured header is supplied.
+   */
+  private validateCustomRequestHeaderOrDefault(
+    header?: CustomRequestHeader | null,
+  ): CustomRequestHeader | null {
+    if (header == null || (header.name === "" && header.value === "")) {
+      return null;
+    }
+
+    const result = validateCustomRequestHeader(header);
+    if (!result.valid) {
+      throw new Error("Invalid custom request header");
+    }
+
+    return result.header;
   }
 
   /**
@@ -395,7 +424,12 @@ abstract class UrlEnvironment implements Environment {
       keyConnector: this.urls.keyConnector,
       scim: this.urls.scim,
       send: this.urls.send,
+      customRequestHeader: this.urls.customRequestHeader,
     };
+  }
+
+  getCustomRequestHeader() {
+    return this.urls?.customRequestHeader ?? null;
   }
 
   hasBaseUrl() {

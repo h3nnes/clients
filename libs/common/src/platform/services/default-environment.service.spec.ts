@@ -231,6 +231,7 @@ describe("EnvironmentService", () => {
         scim: null,
         webVault: null,
         send: null,
+        customRequestHeader: null,
       });
     });
 
@@ -354,6 +355,7 @@ describe("EnvironmentService", () => {
         notifications: null,
         scim: null,
         send: null,
+        customRequestHeader: null,
       });
     });
   });
@@ -379,6 +381,7 @@ describe("EnvironmentService", () => {
         events: null,
         keyConnector: null,
         send: null,
+        customRequestHeader: null,
       });
     });
 
@@ -410,6 +413,7 @@ describe("EnvironmentService", () => {
         events: null,
         keyConnector: null,
         send: null,
+        customRequestHeader: null,
       });
       expect(env.getScimUrl()).toBe("https://vault.example.com/scim/v2");
     });
@@ -420,6 +424,37 @@ describe("EnvironmentService", () => {
       const data = await firstValueFrom(sut.environment$);
 
       expect(data.getRegion()).toBe(Region.US);
+    });
+
+    it("persists and returns a custom request header for self-hosted", async () => {
+      await sut.setEnvironment(
+        Region.SelfHosted,
+        { api: "https://vault.example.com" },
+        {
+          name: "X-Auth-Token",
+          value: "s3cret",
+        },
+      );
+      await awaitAsync();
+
+      const env = await firstValueFrom(sut.globalEnvironment$);
+      expect(env.getCustomRequestHeader()).toEqual({ name: "X-Auth-Token", value: "s3cret" });
+    });
+
+    it("returns null custom request header for cloud and clears on region change", async () => {
+      await sut.setEnvironment(
+        Region.SelfHosted,
+        { api: "https://vault.example.com" },
+        {
+          name: "X-Auth-Token",
+          value: "s3cret",
+        },
+      );
+      await sut.setEnvironment(Region.US);
+      await awaitAsync();
+
+      const env = await firstValueFrom(sut.globalEnvironment$);
+      expect(env.getCustomRequestHeader()).toBeNull();
     });
 
     it("normalizes a blank send url to null", async () => {
