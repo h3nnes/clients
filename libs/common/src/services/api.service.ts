@@ -94,6 +94,7 @@ import { Environment, EnvironmentService } from "../platform/abstractions/enviro
 import { UploadOptions } from "../platform/abstractions/file-upload/file-upload.service";
 import { LogService } from "../platform/abstractions/log.service";
 import { PlatformUtilsService } from "../platform/abstractions/platform-utils.service";
+import { validateCustomRequestHeader } from "../platform/misc/custom-request-header";
 import { buildFetchPipeline, FetchMiddleware } from "../platform/misc/fetch-middleware";
 import { flagEnabled } from "../platform/misc/flags";
 import { Utils } from "../platform/misc/utils";
@@ -1346,9 +1347,65 @@ export class ApiService implements ApiServiceAbstraction {
       request.headers.set("Pragma", "no-cache");
     }
     await this.applyPlatformHeaders(request.headers);
+    await this.applyCustomRequestHeader(request);
 
     const pipeline = buildFetchPipeline(this.middlewares, (req) => this.nativeFetch(req));
     return pipeline(request);
+  }
+
+  /**
+   * Attaches the configured custom request header to the request, but only when the
+   * request targets the origin of one of the configured self-hosted server URLs. The
+   * header is never sent to cloud, CDN, or third-party origins.
+   */
+  private async applyCustomRequestHeader(request: Request): Promise<void> {
+    const env = await firstValueFrom(this.environmentService.environment$);
+    const configured = env.getCustomRequestHeader?.();
+    if (configured == null) {
+      return;
+    }
+
+    const result = validateCustomRequestHeader(configured);
+    if (!result.valid) {
+      return;
+    }
+
+    if (!this.requestTargetsSelfHostedServer(request.url, env)) {
+      return;
+    }
+
+    request.headers.set(result.header.name, result.header.value);
+  }
+
+  private requestTargetsSelfHostedServer(requestUrl: string, env: Environment): boolean {
+    let requestOrigin: string;
+    try {
+      requestOrigin = new URL(requestUrl).origin;
+    } catch {
+      return false;
+    }
+
+    const candidates = [
+      env.getApiUrl(),
+      env.getIdentityUrl(),
+      env.getEventsUrl(),
+      env.getIconsUrl(),
+      env.getNotificationsUrl(),
+      env.getSendUrl(),
+      env.getKeyConnectorUrl(),
+      env.getWebVaultUrl(),
+    ];
+
+    return candidates.some((url) => {
+      if (url == null || url === "") {
+        return false;
+      }
+      try {
+        return new URL(url).origin === requestOrigin;
+      } catch {
+        return false;
+      }
+    });
   }
 
   nativeFetch(request: Request): Promise<Response> {
