@@ -79,11 +79,11 @@ export function customRequestHeaderFormValidator(): ValidatorFn {
     }
 
     const result = validateCustomRequestHeader({ name, value });
-    if (result.valid) {
-      return null;
+    if (result.valid === false) {
+      return { customRequestHeaderInvalid: { reason: result.reason } };
     }
 
-    return { customRequestHeaderInvalid: { reason: result.reason } };
+    return null;
   };
 }
 

@@ -507,7 +507,7 @@ abstract class UrlEnvironment implements Environment {
    * @param baseSuffix Suffix to append to the base URL if the url is not set
    * @returns
    */
-  private getUrl(key: keyof Urls, baseSuffix: string) {
+  private getUrl(key: Exclude<keyof Urls, "customRequestHeader">, baseSuffix: string): string {
     if (this.urls[key] != null) {
       return this.urls[key];
     }
